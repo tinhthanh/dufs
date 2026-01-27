@@ -1,0 +1,61 @@
+name: Build and Deploy vg-zl-dufs
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  SERVICE_NAME: vg-zl-dufs
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+jobs:
+  deploy:
+    name: Deploy to Production Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read and Encode docker-compose
+        id: read_file
+        run: echo "content=$(base64 -w0 docker-compose.prod.yml)" >> $GITHUB_OUTPUT
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            set -e
+            
+            # --- 1. Định nghĩa đường dẫn chuẩn ---
+            REPO_DIR="/home/vetgo/cicd/app_services/repo/${{ env.SERVICE_NAME }}"
+            DATA_DIR="/data/apps/${{ env.SERVICE_NAME }}"
+            
+            # --- 2. Tạo cấu trúc thư mục trên Server ---
+            echo "🛠 Creating directory structure..."
+            mkdir -p "$REPO_DIR"
+            
+            # Tạo thư mục data theo rule chuẩn: /data/apps/SERVICE_NAME/{storage,config,logs}
+            mkdir -p "$DATA_DIR/storage"
+            mkdir -p "$DATA_DIR/config"
+            mkdir -p "$DATA_DIR/logs"
+            
+            # (Optional) Set quyền nếu cần
+            # chmod -R 777 "$DATA_DIR"
+            
+            # --- 3. Deploy ---
+            echo "🚀 Deploying..."
+            echo "${{ steps.read_file.outputs.content }}" | base64 -d > "$REPO_DIR/docker-compose.prod.yml"
+            cd "$REPO_DIR"
+            
+            cat << ENVEOF > .env
+            DOCKERHUB_USERNAME=${{ env.DOCKERHUB_USERNAME }}
+            SERVICE_NAME=${{ env.SERVICE_NAME }}
+            ENVEOF
+            
+            docker-compose --env-file .env -f docker-compose.prod.yml pull
+            docker-compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans
+            
+            echo "✅ Deployment successful for ${{ env.SERVICE_NAME }}"

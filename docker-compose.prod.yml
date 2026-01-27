@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  app:
+    image: sigoden/dufs:latest
+    container_name: ${SERVICE_NAME}
+    restart: unless-stopped
+    
+    # === MOUNT VOLUME THEO CHUẨN MỚI ===
+    # Rule: /data/apps/{SERVICE_NAME}/storage
+    volumes:
+      - /data/apps/${SERVICE_NAME}/storage:/data
+      
+    command: /data --allow-all --path-prefix /${SERVICE_NAME}
+    
+    networks:
+      - traefik_proxy
+      
+    labels:
+      - "traefik.enable=true"
+      
+      # Router cho cluster.* và path /vg-zl-dufs
+      - "traefik.http.routers.${SERVICE_NAME}.rule=HostRegexp(`^cluster\\..+`) && PathPrefix(`/${SERVICE_NAME}`)"
+      
+      - "traefik.http.routers.${SERVICE_NAME}.entrypoints=web"
+      - "traefik.http.routers.${SERVICE_NAME}.service=${SERVICE_NAME}-svc"
+      
+      # Middleware CORS mặc định
+      - "traefik.http.routers.${SERVICE_NAME}.middlewares=default-cors@file"
+      
+      # Port 5000 (Dufs default)
+      - "traefik.http.services.${SERVICE_NAME}-svc.loadbalancer.server.port=5000"
+
+networks:
+  traefik_proxy:
+    external: true
