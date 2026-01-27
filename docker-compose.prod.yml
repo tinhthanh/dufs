@@ -2,11 +2,13 @@ version: '3.8'
 
 services:
   app:
-    image: sigoden/dufs:latest
+    # === IMAGE CHUẨN HOÁ ===
+    # Sử dụng image do CI/CD build ra: tinhthanh/vg-zl-dufs:latest
+    image: ${DOCKERHUB_USERNAME}/${SERVICE_NAME}:latest
     container_name: ${SERVICE_NAME}
     restart: unless-stopped
     
-    # === MOUNT VOLUME THEO CHUẨN MỚI ===
+    # === MOUNT VOLUME CHUẨN HOÁ ===
     # Rule: /data/apps/{SERVICE_NAME}/storage
     volumes:
       - /data/apps/${SERVICE_NAME}/storage:/data
@@ -18,17 +20,10 @@ services:
       
     labels:
       - "traefik.enable=true"
-      
-      # Router cho cluster.* và path /vg-zl-dufs
       - "traefik.http.routers.${SERVICE_NAME}.rule=HostRegexp(`^cluster\\..+`) && PathPrefix(`/${SERVICE_NAME}`)"
-      
       - "traefik.http.routers.${SERVICE_NAME}.entrypoints=web"
       - "traefik.http.routers.${SERVICE_NAME}.service=${SERVICE_NAME}-svc"
-      
-      # Middleware CORS mặc định
       - "traefik.http.routers.${SERVICE_NAME}.middlewares=default-cors@file"
-      
-      # Port 5000 (Dufs default)
       - "traefik.http.services.${SERVICE_NAME}-svc.loadbalancer.server.port=5000"
 
 networks:

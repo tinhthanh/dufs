@@ -1,14 +1,31 @@
-FROM --platform=linux/amd64 messense/rust-musl-cross:x86_64-musl AS amd64
+# === STAGE 1: BUILDER ===
+# Sử dụng Rust trên nền Alpine linux để build cho nhẹ
+FROM rust:1-alpine AS builder
+
+# Cài đặt các thư viện cần thiết để biên dịch C/Rust
+RUN apk add --no-cache musl-dev
+
+# Thiết lập thư mục làm việc
+WORKDIR /app
+
+# Copy toàn bộ source code hiện tại vào container
 COPY . .
-RUN cargo install --path . --root /
 
-FROM --platform=linux/amd64 messense/rust-musl-cross:aarch64-musl AS arm64
-COPY . .
-RUN cargo install --path . --root /
+# Thực hiện build bản release (tối ưu hiệu năng)
+RUN cargo build --release
 
-FROM ${TARGETARCH} AS builder
+# === STAGE 2: RUNNER ===
+# Sử dụng Alpine Linux siêu nhẹ để chạy ứng dụng
+FROM alpine:latest
 
-FROM scratch
-COPY --from=builder /bin/dufs /bin/dufs
-STOPSIGNAL SIGINT
-ENTRYPOINT ["/bin/dufs"]
+# Cài đặt chứng chỉ SSL (cần thiết nếu app có gọi ra ngoài https)
+RUN apk add --no-cache ca-certificates
+
+# Copy file thực thi (binary) từ bước Builder sang bước Runner
+COPY --from=builder /app/target/release/dufs /usr/local/bin/dufs
+
+# Thiết lập thư mục làm việc cho data
+WORKDIR /data
+
+# Thiết lập lệnh chạy mặc định
+ENTRYPOINT ["/usr/local/bin/dufs"]
